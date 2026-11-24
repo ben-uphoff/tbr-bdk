@@ -25,7 +25,7 @@ except ImportError:
     HAS_HTTPX = False
 
 API_KEY = os.environ.get("TBR_API_KEY", "").strip()
-API_URL = os.environ.get("TBR_API_URL", "https://thebotrange.com/api").rstrip("/")
+API_URL = os.environ.get("TBR_API_URL", "https://api.thebotrange.com/api/v1").rstrip("/")
 
 if not API_KEY:
     print("[ERROR] TBR_API_KEY environment variable is required.")
