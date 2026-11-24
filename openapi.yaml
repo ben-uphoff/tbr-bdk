@@ -6,8 +6,12 @@ info:
     All gameplay endpoints require authentication using a Bearer token.
   version: 1.0.0
 servers:
-  - url: http://localhost:4000/api
-    description: Local development server
+  - url: https://api.thebotrange.com/api/v1
+    description: Production API v1 (canonical)
+  - url: https://api.thebotrange.com/api
+    description: Production API (unversioned v1 compatibility alias)
+  - url: http://localhost:4000/api/v1
+    description: Local development server v1
 paths:
   /game/state:
     get:
@@ -32,7 +36,7 @@ paths:
   /game/leaderboard:
     get:
       summary: Retrieve Thematic Role Leaderboards
-      description: Returns rankings of Operators and Units across six distinct thematic roles (omni, vanguard, pilot, archaeologist, mechanic, fleet). Supports windowed pagination. Does not consume Action Tokens.
+      description: Returns rankings of Operators across six distinct thematic roles (omni, vanguard, pilot, archaeologist, mechanic, fleet). The fleet role aggregates wealth and extraction telemetry across an Operator's entire surface fleet. Supports windowed pagination. Does not consume Action Tokens.
       security:
         - BearerAuth: []
       parameters:
@@ -412,7 +416,7 @@ paths:
   /game/clear:
     post:
       summary: Clear Crystalline Terrain
-      description: Clears crystalline terrain depth on the unit's current tile by 10%. Consumes 1 Action Token and 1 EN.
+      description: Clears crystalline terrain depth on the unit's current tile by 100m. Consumes 1 Action Token and 1 EN.
       security:
         - BearerAuth: []
       responses:
@@ -439,7 +443,7 @@ paths:
                         type: integer
                       crystal_depth:
                         type: integer
-                        example: 75
+                        example: 750
                       terrain_name:
                         type: string
                         example: "Crystalline Veins"
@@ -511,6 +515,10 @@ paths:
                     items:
                       type: object
                   banked_artifacts:
+                    type: array
+                    items:
+                      type: object
+                  artifact_medallions:
                     type: array
                     items:
                       type: object
@@ -592,8 +600,64 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GameStateResponse'
+        '202':
+          description: Sector at concurrent active bot capacity (`max_concurrent_bots`); unit placed in orbital deployment queue.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "queued"
+                  queue_position:
+                    type: integer
+                    example: 4
+                  queue_depth:
+                    type: integer
+                    example: 19
+                  active_bots_on_map:
+                    type: integer
+                    example: 150
+                  max_concurrent_bots:
+                    type: integer
+                    example: 150
+                  estimated_wait_seconds:
+                    type: integer
+                    example: 32
+                  retry_after_seconds:
+                    type: integer
+                    example: 5
+                  message:
+                    type: string
+                    example: "Sector at maximum active bot capacity (150/150). Orbital deployment queued at position 4."
         '400':
           description: Deployment failed (already spawned, or respawning cooldown active).
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /game/despawn:
+    post:
+      summary: Emergency Manual Despawn
+      description: Triggers an immediate zero-AP manual emergency despawn (scuttle) returning the bot to the chassis bay. Jettisons carried raw resources and discards unbanked in-run Operator XP while preserving Action Tokens, 100% of carried artifacts, and 50% Ark component salvage.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Emergency despawn complete.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  despawn_summary:
+                    type: object
+                  state:
+                    $ref: '#/components/schemas/GameStateResponse'
+        '400':
+          description: Bot is already despawned (`already_despawned`).
         '401':
           $ref: '#/components/responses/UnauthorizedError'
 
@@ -715,6 +779,14 @@ paths:
                     type: array
                     items:
                       type: string
+                  banked_modules:
+                    type: object
+                    additionalProperties:
+                      type: integer
+                    description: Map of coprocessor module ID to unequipped spare quantity in the Operator Depot.
+                  max_boss_level_defeated:
+                    type: integer
+                    description: Highest world boss level defeated by this Operator.
                   equipped_coprocessor:
                     type: string
                     nullable: true
@@ -1398,6 +1470,20 @@ components:
           example:
             scrap: 50
             copper: 12
+        banked_modules:
+          type: object
+          additionalProperties:
+            type: integer
+          example:
+            ap_recirculator: 2
+        max_boss_level_defeated:
+          type: integer
+          example: 2
+        artifact_medallions:
+          type: array
+          items:
+            type: object
+          example: []
 
     WorldMetadata:
       type: object
@@ -1462,8 +1548,8 @@ components:
       properties:
         crystal_depth:
           type: integer
-          example: 42
-          description: "Deterministic terrain crystal depth percentage (0-99) of the tile."
+          example: 420
+          description: "Deterministic terrain crystal depth in meters (0-1000) of the tile."
         terrain_name:
           type: string
           example: "Crystalline Rubble"

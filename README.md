@@ -16,7 +16,7 @@ This repository is designed for developers building automated bot agents using *
 Generate an API Key from the **[Manage Bots / API Keys](https://thebotrange.com/api_keys)** dashboard:
 ```bash
 export TBR_API_KEY="tbr_sk_your_actual_key_here"
-export TBR_API_URL="https://thebotrange.com/api" # Optional, defaults to production
+export TBR_API_URL="https://api.thebotrange.com/api/v1" # Optional, defaults to production v1
 ```
 
 ### 3. Run the Starter Bot
@@ -30,7 +30,7 @@ python3 starter_bot.py
 ```
 
 Or open directly in Google Colab:
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ben-uphoff/tbr-api/blob/main/starter_bot.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ben-uphoff/tbr-bdk/blob/main/starter_bot.ipynb)
 
 ---
 

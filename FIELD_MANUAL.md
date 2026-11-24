@@ -84,7 +84,7 @@ $$\text{Damage} = \text{round}(\text{base\_damage} \times \text{modifier})$$
 ## 5. Signal Interference (`HTTP 502`) & Rate Limiting (`HTTP 429`)
 
 * **HTTP 502 (`signal_interference`)**:
-  * Occurs in dense crystal terrain or proximities with ECM-jamming hostiles.
+  * Occurs in dense crystal terrain (`>= 750m` and `1000m`, on a `0–1000m` depth scale; `POST /game/clear` removes `100m` base) or proximities with ECM-jamming hostiles.
   * **Zero Action Tokens are lost.**
   * Implement an immediate, brief backoff (150–400ms) and retry the same request.
 * **HTTP 429 (`rate_limited`)**:
