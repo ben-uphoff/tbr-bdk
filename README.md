@@ -56,6 +56,7 @@ Improve starter_bot.py to accomplish Mission 01:
 | :--- | :--- |
 | **[`starter_bot.py`](starter_bot.py)** | Single-file runnable bot loop with PEP 723 metadata & standard library fallback. |
 | **[`openapi.yaml`](openapi.yaml)** | Official OpenAPI 3.0 specification for all TBR game endpoints. |
+| **[`docs/API_GUIDE.md`](docs/API_GUIDE.md)** | Player API quickstart and cURL examples for every major game endpoint. |
 | **[`FIELD_MANUAL.md`](FIELD_MANUAL.md)** | Tactical guide covering world topology, combat damage math, and free move mechanics. |
 | **[`GEMINI.md`](GEMINI.md)** | Strict `< 40` line rulebook for Gemini / Antigravity coding agents. |
 | **[`CLAUDE.md`](CLAUDE.md)** | Strict `< 40` line rulebook for Claude Code / Cursor / Windsurf coding agents. |
