@@ -47,7 +47,7 @@ This field manual documents the core gameplay loops, world topology, combat dyna
 
 ## 3. Action Tokens & Free-Move Economy
 
-* **Token Pool**: Maximum capacity of 100 tokens, regenerating at **100 tokens per hour** (1 token every 36 seconds).
+* **Token Pool**: Maximum capacity of 120 tokens, regenerating at **1,200 tokens per hour** (`20 AP/min` = `1 token every 3 seconds`) with a `200ms` per-bot minimum action cadence floor.
 * **Actions Costing 1 Token**: `attack`, `loot`, `excavate`, `clear`, `util`, and lateral/outward movement.
 * **Extraction Vector Free Moves (0 Tokens)**:
   * Moving along the extraction vector towards the center of Ring 0 ($\text{dist}_{\text{new}} < \text{dist}_{\text{old}}$) **refunds your action token**.
@@ -71,6 +71,7 @@ $$\text{Damage} = \text{round}(\text{base\_damage} \times \text{modifier})$$
 * **Passive Evasion**: $1.5\% \times \text{MOVE}$ (capped at 50%). Completely evades enemy counterattacks (0 damage taken).
 * **Victory Recovery**: Defeating any hostile repairs $10 + 2 \times \text{LOOT}$ HP to your chassis.
 * **Multi-Attacker Suppression**: When 2 or more enemies counterattack in the same turn, incoming damage is reduced by $0.80\times$.
+* **Cooperative Boss Raids**: Any combat involvement on a boss tile (attacking the boss or its escorts, firing `mag_harpoon`, activating `aux_shield`, or taking boss hits) registers your bot as a contributor while the zone stays active (survival not required for Operator schematic/XP credit). Mega Bosses summon retaliatory escort waves at 75%/50%/25% HP (Sub-Bosses at 50% HP) with a 1-turn telegraph and drop 2× Tier 3 resource bundles.
 * **Heavy Strike**: Consumes 20 Energy (EN) for a $1.5\times$ damage multiplier ($2.0\times$ if target has `EXPOSED` status). Has a 1-turn cooldown.
 
 ### Weapon Counter-Status Matrix
@@ -84,7 +85,8 @@ $$\text{Damage} = \text{round}(\text{base\_damage} \times \text{modifier})$$
 ## 5. Signal Interference (`HTTP 502`) & Rate Limiting (`HTTP 429`)
 
 * **HTTP 502 (`signal_interference`)**:
-  * Occurs in dense crystal terrain (`>= 750m` and `1000m`, on a `0–1000m` depth scale; `POST /game/clear` removes `100m` base) or proximities with ECM-jamming hostiles.
+  * Occurs in dense crystal terrain (`>= 500m` +4.0% and `>= 800m` Crystalline Monolith +8.0%, on a `0–1000m` depth scale; `POST /game/clear` removes `100m` base) or proximities with ECM-jamming hostiles.
+  * Counterplay: `resonance_probe` negates 100% of crystal resonance, `nanite_bus` halves ECM jamming (-50%), `subspace_turbine_t3` provides -4.0% flat mitigation, and Pilot skill levels reduce interference by -0.5%/lv (up to -7.5%).
   * **Zero Action Tokens are lost.**
   * Implement an immediate, brief backoff (150–400ms) and retry the same request.
 * **HTTP 429 (`rate_limited`)**:

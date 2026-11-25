@@ -13,6 +13,79 @@ servers:
   - url: http://localhost:4000/api/v1
     description: Local development server v1
 paths:
+  /admin/promo_codes:
+    get:
+      summary: List Promo Codes (Admin Only)
+      description: Returns recent promo codes, optionally filtered by user_id or email. Requires an API key belonging to an Admin account.
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: user_id
+          schema:
+            type: integer
+          description: Filter codes bound to a specific user ID.
+        - in: query
+          name: email
+          schema:
+            type: string
+          description: Filter codes bound to a specific user email.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+          description: Maximum number of recent codes to return.
+      responses:
+        '200':
+          description: Promo codes retrieved.
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Forbidden - Admin privileges required.
+    post:
+      summary: Generate Promo Codes (Admin Only)
+      description: Generates user-bound promo codes or shareable cohort promo codes. Requires an API key belonging to an Admin account.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id:
+                  type: integer
+                  description: Target user ID for user-bound promo code.
+                email:
+                  type: string
+                  description: Target user email for user-bound promo code.
+                bot_grant:
+                  type: integer
+                  default: 1
+                  minimum: 1
+                  maximum: 10
+                  description: Number of bots granted by each code.
+                count:
+                  type: integer
+                  default: 1
+                  minimum: 1
+                  maximum: 100
+                  description: Number of codes to generate.
+                cohort_name:
+                  type: string
+                  description: Optional cohort label for cohort codes.
+      responses:
+        '200':
+          description: Promo code(s) successfully created.
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Forbidden - Admin privileges required.
+        '422':
+          description: Validation error.
+
   /game/state:
     get:
       summary: Retrieve Game State
@@ -593,6 +666,20 @@ paths:
                       nullable: true
                       enum: [ap_recirculator, vector_sensor, resonance_probe, nanite_bus, kinetic_vrm, reactive_armor_t2, plasma_drill_t2, quantum_processor, subspace_turbine_t3, aegis_field_t3]
                       description: Optional fabricated Coprocessor Module ID to slot on spawn.
+                    ark_components:
+                      type: object
+                      additionalProperties:
+                        type: integer
+                      description: Optional map of banked Ark component IDs to quantities to load into carried cargo on spawn.
+                      example:
+                        ark_internal_frame: 1
+                    artifacts:
+                      type: object
+                      additionalProperties:
+                        type: integer
+                      description: Optional map of banked artifact IDs to quantities to load into carried cargo on spawn.
+                      example:
+                        nga_art_101: 1
       responses:
         '200':
           description: Player successfully deployed and spawned.
@@ -697,6 +784,16 @@ paths:
                       nullable: true
                       enum: [ap_recirculator, vector_sensor, resonance_probe, nanite_bus, kinetic_vrm, reactive_armor_t2, plasma_drill_t2, quantum_processor, subspace_turbine_t3, aegis_field_t3]
                       description: Optional default Coprocessor Module ID.
+                    ark_components:
+                      type: object
+                      additionalProperties:
+                        type: integer
+                      description: Optional map of banked Ark component IDs to quantities to load into carried cargo.
+                    artifacts:
+                      type: object
+                      additionalProperties:
+                        type: integer
+                      description: Optional map of banked artifact IDs to quantities to load into carried cargo.
       responses:
         '200':
           description: Loadout configuration updated successfully.
@@ -728,8 +825,9 @@ paths:
                   example: ap_recirculator
                 component_id:
                   type: string
-                  description: ID of Ark component to craft (thruster_cluster, guidance_computer, fuel_cell, life_support, solar_array, science_lab, heavy_plating).
-                  example: thruster_cluster
+                  enum: [ark_internal_frame, ark_onboard_computer, ark_nav_sensor, ark_heat_shield, ark_fuel_pod, ark_launch_structure]
+                  description: ID of Ark component to craft.
+                  example: ark_internal_frame
                 quantity:
                   type: integer
                   description: Quantity of Ark components to fabricate (defaults to 1).
@@ -902,8 +1000,8 @@ paths:
 
   /game/ark/load:
     post:
-      summary: Load Banked Artifact into Completed Ark Payload
-      description: Loads specified banked artifact (`artifact_id` and optional `quantity`) from player's personal collection into the completed Ark payload while standing on the Ark tile during the 24-hour launch window (`ready_for_launch` status). Costs 1 Action Token (not refunded on failure).
+      summary: Load Carried Artifact into Completed Ark Payload
+      description: Loads specified carried artifact (`artifact_id` and optional `quantity`) from the bot's carried cargo into the completed Ark payload while standing on the Ark tile during the 24-hour launch window (`ready_for_launch` status). Costs 1 Action Token (not refunded on failure).
       security:
         - BearerAuth: []
       requestBody:
@@ -1656,6 +1754,17 @@ components:
         agro:
           type: boolean
           example: false
+        raid_telemetry:
+          type: object
+          nullable: true
+          description: "Present on boss and sub-boss entities (`is_boss: true`). Tracks live-zone cooperative raid participation."
+          properties:
+            contributors_count:
+              type: integer
+              example: 3
+            contributed:
+              type: boolean
+              example: true
         boss:
           type: boolean
           example: false
@@ -1700,10 +1809,10 @@ components:
       properties:
         tokens:
           type: number
-          example: 98
+          example: 118
         capacity:
           type: integer
-          example: 100
+          example: 120
         seconds_until_refill:
           type: integer
           example: 12
