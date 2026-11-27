@@ -72,3 +72,6 @@ Improve starter_bot.py to accomplish Mission 01:
 * `POST /game/attack` - Executes attack or Heavy Strike on a hostile target on the active tile.
 * `POST /game/loot` - Harvests resource caches on the active tile.
 * `POST /game/extract` - Extracts carried spoils and banked artifacts when inside the Ring 0 extraction zone.
+* `POST /game/despawn` - Zero-AP emergency scuttle back to standby (5s cooldown, 100% artifact retention, 50% Ark component raw material salvage).
+* `POST /game/transfer` - Transfers carried raw resources between same-Operator bots on the exact same tile (`-1 AP` sender, `0 AP` receiver).
+* `POST /game/cache` - Deploys (`>= 10` raw units) or retrieves/plunders a bare-ground (`0m`) tile resource cache outside Ring 0.
