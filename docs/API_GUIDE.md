@@ -76,7 +76,7 @@ curl -X POST -H "Authorization: Bearer $TBR_API_KEY" \
 ### B. Resources, Vaults & Extraction
 
 #### `POST /game/loot` *(-1 AP)*
-Harvests all resources and enemy drops on the current tile. Blocked (`400 tile_blocked_by_agro_enemy`) if an aggressive enemy is present.
+Harvests all resources and enemy drops on the current tile (`current_tile.resources[].resource_type`, returned in `looted[].type`). Blocked (`400 tile_blocked_by_agro_enemy`) if an aggressive enemy is present.
 
 ```bash
 curl -X POST -H "Authorization: Bearer $TBR_API_KEY" \
@@ -84,7 +84,7 @@ curl -X POST -H "Authorization: Bearer $TBR_API_KEY" \
 ```
 
 #### `POST /game/excavate` *(-1 AP)*
-Excavates the current tile for your Personal Vault (90m cycle). Returns `vault_hint` (`N`, `S`, `E`, `W`) when no vault is on the tile.
+Excavates the current tile for your Personal Vault (90m cycle). Returns `vault_hint` (`N`, `S`, `E`, `W`) and `vault_hint_full` when no vault is on the tile (if equipped with `env_scanner`, `vector_sensor`, or `vault_sensor`). Also exposed as `player.vault_hint` in `GET /game/state`.
 
 ```bash
 curl -X POST -H "Authorization: Bearer $TBR_API_KEY" \
@@ -92,11 +92,38 @@ curl -X POST -H "Authorization: Bearer $TBR_API_KEY" \
 ```
 
 #### `POST /game/extract` *(-1 AP)*
-Must be executed inside a Ring 0 Extraction Zone (`[[4,4], [4,5], [5,4], [5,5]]` on a `10×10` world). Banks all carried resources, credits, Operator XP, and artifacts to your Operator Depot and returns the bot to standby.
+Must be executed inside a Ring 0 Extraction Zone (`zone.is_extraction_zone == true`, e.g., `[[4,4], [4,5], [5,4], [5,5]]` on a `10×10` world). Banks all carried resources, credits, pending in-run Operator XP/accomplishments, and artifacts to your Operator Depot and returns the bot to standby.
 
 ```bash
 curl -X POST -H "Authorization: Bearer $TBR_API_KEY" \
   "$TBR_API_URL/game/extract"
+```
+
+#### `POST /game/transfer` *(-1 AP sender, 0 AP receiver)*
+Transfers carried raw resources (`inventory` only; excludes Artifacts, Ark components, and Recipes) to another spawned bot belonging to the **same Operator** (`same_operator: true`) on the **exact same tile** (`0%` tax, `0` XP/wealth). Provokes an enemy counterattack against the sender if an aggressive enemy is on the tile.
+
+```bash
+curl -X POST -H "Authorization: Bearer $TBR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"target_bot_id": 42, "resources": {"iron": 10, "scrap": 5}}' \
+  "$TBR_API_URL/game/transfer"
+```
+
+#### `POST /game/cache` *(-1 AP)*
+Deploys raw resources (`>= 10` total units) into a bare-ground (`0m` crystal depth) tile cache outside Ring 0, or retrieves/plunders an exposed (`0m`) cache on the current tile. Max 1 active cache per bot (`409 existing_cache_active` unless `"replace_existing": true`). Owner bots retrieve `100%`; rival bots plunder `ceil(qty / 2)` (`100%` if `<= 2`) once per rival bot. Returns `400 crystal_depth_not_bare_ground` if `crystal_depth > 0m`.
+
+```bash
+# Deploy a bare-ground cache
+curl -X POST -H "Authorization: Bearer $TBR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"action": "deploy", "resources": {"iron": 10, "copper": 5}}' \
+  "$TBR_API_URL/game/cache"
+
+# Retrieve or plunder an exposed (0m) cache
+curl -X POST -H "Authorization: Bearer $TBR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"action": "retrieve"}' \
+  "$TBR_API_URL/game/cache"
 ```
 
 #### `GET /game/artifacts` *(0 AP)*
@@ -112,7 +139,7 @@ curl -H "Authorization: Bearer $TBR_API_KEY" \
 ### C. Tactical Combat & Utilities
 
 #### `POST /game/attack` *(-1 AP)*
-Attacks a hostile `enemy_id` on the current tile. Pass `"heavy": true` (requires engagement + `10 EN` base, 1-turn cooldown) for a `1.5×` Heavy Strike (`2.0×` vs `EXPOSED`).
+Attacks a hostile `enemy_id` (alias: `target_id`) on the current tile. Regular attacks (`"heavy": false`) restore `+5 EN` and engage the target. Pass `"heavy": true` (alias: `is_heavy`; requires prior engagement + `10 EN` base, `+5 EN` vs `CRYSTALLIZING` unless `shock_lance`, `-2 EN/rank` via `van_capacitor`, 1-turn cooldown) for a `1.5×` Heavy Strike (`2.0×` vs `EXPOSED`).
 
 ```bash
 curl -X POST -H "Authorization: Bearer $TBR_API_KEY" \
@@ -157,7 +184,7 @@ curl -X POST -H "Authorization: Bearer $TBR_API_KEY" \
 ```
 
 #### `POST /game/despawn` *(0 AP)*
-Immediate zero-AP emergency scuttle back to standby. Jettisons carried raw ore and unbanked run XP while preserving Action Tokens, `100%` of carried artifacts, and `50%` Ark component salvage.
+Immediate zero-AP emergency scuttle back to standby with a **5-second respawn cooldown** (no chassis stat reroll; revokes active boss contributor status). Jettisons carried raw ore and unbanked run XP while preserving Action Tokens, `100%` of carried artifacts, and `50%` raw recipe material salvage on carried Ark components (`0` intact components returned).
 
 ```bash
 curl -X POST -H "Authorization: Bearer $TBR_API_KEY" \
@@ -248,3 +275,23 @@ curl -X POST -H "Authorization: Bearer $TBR_API_KEY" \
 
 - `PATCH /game/bot/rename` *(0 AP)* — `{"name": "CyberTitan_99"}` renames the active bot handle (3–24 chars).
 - `GET /game/leaderboard?role=omni&page=1&limit=25` *(0 AP)* — Roles: `omni`, `vanguard`, `pilot`, `archaeologist`, `mechanic`, `fleet`.
+
+---
+
+## 4. Quick Reference IDs & Catalogs
+
+See [`FIELD_MANUAL.md`](../FIELD_MANUAL.md) for full recipes, modifier keys, formulas, and combat/raid mechanics.
+
+- **Weapons**: `plasma_beam`, `vibro_blade`, `kinetic_cannon`, `shock_lance`
+- **Armors**: `bonded_carbon`, `integrated_ceramic`, `fused_plastanium`, `crystallized_amalgam`
+- **Utilities**: `laz_excavator`, `env_scanner`, `aux_shield`, `mag_harpoon`
+- **Coprocessor Modules**:
+  - Tier 1: `ap_recirculator`, `vector_sensor`, `resonance_probe`, `nanite_bus`
+  - Tier 2: `kinetic_vrm`, `reactive_armor_t2`, `plasma_drill_t2`
+  - Tier 3: `quantum_processor`, `subspace_turbine_t3`, `aegis_field_t3`
+- **Ark Components**: `ark_internal_frame`, `ark_heat_shield`, `ark_launch_structure`, `ark_onboard_computer`, `ark_nav_sensor`, `ark_fuel_pod`
+- **Operator Skill Lines & `skill_id` Nodes**:
+  - `vanguard`: `van_core`, `van_ballistics`, `van_plating`, `van_capacitor`, `van_breaker`, `van_titan_hunter`, `van_executioner`, `van_bastion`
+  - `pilot`: `pil_core`, `pil_thrusters`, `pil_dynamo`, `pil_stealth`, `pil_evasion`, `pil_courier`, `pil_afterburner`, `pil_blackbox`
+  - `archaeologist`: `arc_core`, `arc_seismic`, `arc_optics`, `arc_chronometer`, `arc_brushwork`, `arc_curator`, `arc_echo_locator`, `arc_ark_envoy`
+  - `mechanic`: `mec_core`, `mec_harvester`, `mec_laser_bore`, `mec_salvager`, `mec_prospector`, `mec_arkwright`, `mec_overdrive_mod`, `mec_master_builder`

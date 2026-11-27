@@ -266,9 +266,16 @@ paths:
                 enemy_id:
                   type: string
                   description: ID of the enemy drone or hostile to attack.
+                target_id:
+                  type: string
+                  description: Compatibility alias for `enemy_id`.
                 heavy:
                   type: boolean
-                  description: Set to true to execute a Heavy Strike (costs 10 EN).
+                  description: Set to true to execute a Heavy Strike (costs 10 EN base).
+                  default: false
+                is_heavy:
+                  type: boolean
+                  description: Compatibility alias for `heavy`.
                   default: false
       responses:
         '200':
@@ -469,6 +476,15 @@ paths:
                         type: array
                         items:
                           type: string
+                      vault_hint:
+                        type: string
+                        nullable: true
+                        enum: [N, S, E, W]
+                        description: Cardinal direction hint toward active Personal Vault (when equipped with env_scanner, vector_sensor, or vault_sensor).
+                      vault_hint_full:
+                        type: string
+                        nullable: true
+                        example: "South"
         '400':
           description: Player is respawning or despawned.
           content:
@@ -548,6 +564,147 @@ paths:
                     example: "Unit requires at least 1 EN to clear terrain."
         '401':
           $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/RateLimitedError'
+        '502':
+          $ref: '#/components/responses/SignalInterferenceError'
+
+  /game/transfer:
+    post:
+      summary: Tactical Inventory Handoff
+      description: Transfers carried raw resources (excluding Artifacts, Ark components, and Recipes) to another spawned bot belonging to the same Operator on the exact same tile (-1 AP for sender, 0 AP for receiver, 0% tax). Provokes a standard counterattack against the sender if an aggressive enemy is on the tile. Awards zero XP, accomplishments, or historic_wealth.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - target_bot_id
+              properties:
+                target_bot_id:
+                  type: integer
+                  description: Bot ID of the recipient bot on the same tile (or use `target_id` / `target_name`).
+                  example: 42
+                resources:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                  description: Optional map of raw resource types to quantities. Omit or set `transfer_all: true` to transfer all carried raw resources.
+                  example:
+                    iron: 10
+                    scrap: 5
+                transfer_all:
+                  type: boolean
+                  example: false
+      responses:
+        '200':
+          description: Transfer completed successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transferred:
+                    type: object
+                    additionalProperties:
+                      type: integer
+                  recipient:
+                    type: object
+                    properties:
+                      bot_id:
+                        type: integer
+                      name:
+                        type: string
+                      inventory:
+                        type: object
+                        additionalProperties:
+                          type: integer
+                  player:
+                    $ref: '#/components/schemas/PlayerState'
+                  combat_log:
+                    type: array
+                    items:
+                      type: string
+        '400':
+          description: Invalid transfer parameters, insufficient resources, or non-raw item specified.
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Target bot belongs to a different Operator (`not_same_operator`).
+        '404':
+          description: Target bot is not present on the current tile (`target_not_on_tile`).
+        '429':
+          $ref: '#/components/responses/RateLimitedError'
+        '502':
+          $ref: '#/components/responses/SignalInterferenceError'
+
+  /game/cache:
+    post:
+      summary: Deploy or Retrieve Bare-Ground Tile Cache
+      description: Deploys raw resources (>= 10 total units) into a bare-ground (`0m` crystal depth) tile cache outside Ring 0, or retrieves/plunders an exposed (`0m`) tile cache. Each bot can have at most one active cache (24h TTL, persists across idle zones); deploying on a new tile requires `replace_existing: true` acknowledging the previous cache will be destroyed. Owner bots retrieve 100% and remove the cache; rival bots plunder 50% of each stack (rounded up, or 100% when <= 2) strictly once per rival bot. Caches are concealed when crystal regrows (`crystal_depth > 0m`) unless scanned with `env_scanner` / `vector_sensor`.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [deploy, retrieve]
+                  description: Defaults to `deploy` if `resources` or `deposit_all` is provided, otherwise `retrieve`.
+                resources:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                  example:
+                    iron: 10
+                    copper: 5
+                deposit_all:
+                  type: boolean
+                  example: false
+                replace_existing:
+                  type: boolean
+                  description: Required (`true`) when deploying a new cache on a different tile while this bot already has an active cache elsewhere, acknowledging the old cache will be lost.
+                  example: false
+      responses:
+        '200':
+          description: Cache action completed successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cache_action:
+                    type: string
+                    enum: [deployed, merged, retrieved, plundered]
+                  cached_resources:
+                    type: object
+                    additionalProperties:
+                      type: integer
+                  retrieved_resources:
+                    type: object
+                    additionalProperties:
+                      type: integer
+                  player:
+                    $ref: '#/components/schemas/PlayerState'
+                  combat_log:
+                    type: array
+                    items:
+                      type: string
+        '400':
+          description: Tile crystal depth > 0m (`crystal_depth_not_bare_ground`), Ring 0 restriction (`cannot_cache_in_extraction_zone`), < 10 units (`minimum_cache_quantity_not_met`), or already plundered by this bot (`already_plundered_by_bot`).
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: No cache exists on the current tile (`no_cache_on_tile`).
+        '409':
+          description: Bot already has an active cache on another tile and `replace_existing` was not set (`existing_cache_active`).
         '429':
           $ref: '#/components/responses/RateLimitedError'
         '502':
@@ -892,7 +1049,7 @@ paths:
   /game/ark:
     get:
       summary: Query Active Ark Payload Telemetry
-      description: Retrieves status, zone/tile landing location, 1,000,000 credit construction progress, installed components, boss threat, and paginated loaded payload artifacts. Costs 1 Action Token.
+      description: Retrieves status, zone/tile landing location, 5,000 baseline credit construction progress (dynamically scaled by sector bot population), installed components, boss threat, and paginated loaded payload artifacts. Costs 1 Action Token.
       security:
         - BearerAuth: []
       parameters:
@@ -1481,6 +1638,9 @@ components:
         - equipped_utility
         - spawned
       properties:
+        name:
+          type: string
+          example: "player_one"
         username:
           type: string
           example: "player_one"
@@ -1496,6 +1656,14 @@ components:
           items:
             type: integer
           example: [0, 0]
+        vault_hint:
+          type: string
+          nullable: true
+          example: "S"
+        vault_hint_full:
+          type: string
+          nullable: true
+          example: "South"
         hp:
           type: integer
           example: 100
@@ -1544,6 +1712,20 @@ components:
         equipped_utility:
           type: string
           example: "laz_excavator"
+        equipped_coprocessor:
+          type: string
+          nullable: true
+          example: "ap_recirculator"
+        unlocked_mods:
+          type: array
+          items:
+            type: string
+          example: ["ap_recirculator"]
+        fabricated_mods:
+          type: array
+          items:
+            type: string
+          example: []
         inventory:
           type: object
           additionalProperties:
@@ -1561,6 +1743,16 @@ components:
           items:
             type: object
           example: []
+        carried_ark_components:
+          type: object
+          additionalProperties:
+            type: integer
+          example: {}
+        banked_ark_components:
+          type: object
+          additionalProperties:
+            type: integer
+          example: {}
         banked_resources:
           type: object
           additionalProperties:
@@ -1568,6 +1760,12 @@ components:
           example:
             scrap: 50
             copper: 12
+        current_wealth:
+          type: integer
+          example: 150
+        historic_wealth:
+          type: integer
+          example: 4200
         banked_modules:
           type: object
           additionalProperties:
@@ -1634,6 +1832,27 @@ components:
           type: string
           example: "Fringe"
           description: "Human-readable label for the concentric threat ring."
+        extraction_vector:
+          type: object
+          nullable: true
+          description: "Directional guidance vector toward the nearest Ring 0 extraction zone."
+          properties:
+            in_extraction?:
+              type: boolean
+              example: false
+            direction:
+              type: string
+              nullable: true
+              example: "se"
+            arrow:
+              type: string
+              example: "↘"
+            label:
+              type: string
+              example: "SE"
+            distance:
+              type: integer
+              example: 4
 
     TileDetails:
       type: object
@@ -1660,6 +1879,27 @@ components:
           type: string
           example: "Fringe"
           description: "Human-readable label for the concentric threat ring."
+        extraction_vector:
+          type: object
+          nullable: true
+          description: "Directional guidance vector toward the nearest Ring 0 extraction zone."
+          properties:
+            in_extraction?:
+              type: boolean
+              example: false
+            direction:
+              type: string
+              nullable: true
+              example: "se"
+            arrow:
+              type: string
+              example: "↘"
+            label:
+              type: string
+              example: "SE"
+            distance:
+              type: integer
+              example: 4
         risk_multiplier:
           type: number
           example: 1.0
@@ -1677,19 +1917,58 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PresentResource'
+        cache:
+          $ref: '#/components/schemas/TileCache'
+
+    TileCache:
+      type: object
+      nullable: true
+      description: "Bare-ground deployable resource cache on this tile (hidden from rivals without sensors when crystal_depth > 0m)."
+      properties:
+        owner_id:
+          type: integer
+        owner_bot_id:
+          type: integer
+        owner_name:
+          type: string
+        is_owner:
+          type: boolean
+        resources:
+          type: object
+          additionalProperties:
+            type: integer
+        total_units:
+          type: integer
+        buried:
+          type: boolean
+        accessible:
+          type: boolean
+        crystal_depth:
+          type: integer
 
     PresentPlayer:
       type: object
       required:
         - user_id
-        - username
+        - bot_id
+        - name
+        - same_operator
       properties:
         user_id:
           type: integer
           example: 2
+        bot_id:
+          type: integer
+          example: 2
+        name:
+          type: string
+          example: "rival_bot"
         username:
           type: string
           example: "rival_bot"
+        same_operator:
+          type: boolean
+          example: false
 
     PresentEnemy:
       type: object
@@ -1777,10 +2056,10 @@ components:
     PresentResource:
       type: object
       required:
-        - type
+        - resource_type
         - quantity
       properties:
-        type:
+        resource_type:
           type: string
           example: "scrap"
         quantity:
